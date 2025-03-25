@@ -13,12 +13,6 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-// Function to get row background color (alternating gradient effect)
-func getRowBgColor(index int) ui.Color {
-	colors := []ui.Color{ui.ColorBlue, ui.ColorCyan} // Alternate between two colors
-	return colors[index%len(colors)]
-}
-
 // Function to get CPU/memory usage color gradient
 func getGradientColor(usage float64) ui.Color {
 	switch {
@@ -126,10 +120,6 @@ func main() {
 			displayRows := append([][]string{{"PID", "Name", "CPU%", "Memory%"}}, procData[scrollOffset:endIndex]...)
 
 			processTable.Rows = displayRows
-			for i := 1; i < len(displayRows); i++ {
-				processTable.RowStyles[i] = ui.NewStyle(ui.ColorWhite, getRowBgColor(i)) // Full row color
-			}
-
 			ui.Render(grid)
 		}
 	}()
