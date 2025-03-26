@@ -47,11 +47,11 @@ func main() {
 	processTable.RowSeparator = false
 	processTable.TextAlignment = ui.AlignLeft
 	processTable.Rows = [][]string{{"PID", "Name", "CPU%", "Memory%"}}
-	processTable.SetRect(0, 0, 80, 20) // Set dimensions
+	processTable.SetRect(0, 0, 80, 20)
 
 	// Scroll variables
 	scrollOffset := 0
-	const maxVisibleRows = 10 // Number of rows visible at a time
+	const maxVisibleRows = 15
 
 	// Layout Grid
 	grid := ui.NewGrid()
@@ -64,13 +64,14 @@ func main() {
 
 	ui.Render(grid)
 
-	ticker := time.NewTicker(time.Second).C
+	// Variables to store process data
 	var procData [][]string
 
+	// Update system usage every second
 	go func() {
-		for range ticker {
+		for range time.NewTicker(1 * time.Second).C {
 			// Fetch CPU Usage
-			cpuPercent, _ := cpu.Percent(time.Second, false)
+			cpuPercent, _ := cpu.Percent(0, false)
 			if len(cpuPercent) > 0 {
 				cpuUsage := cpuPercent[0]
 				cpuBar.Percent = int(cpuUsage)
@@ -85,16 +86,23 @@ func main() {
 			memBar.Label = fmt.Sprintf("%.2f%% (%.2fGB/%.2fGB)", memUsage, float64(memStats.Used)/1e9, float64(memStats.Total)/1e9)
 			memBar.BarColor = getGradientColor(memUsage)
 
-			// Fetch Running Processes
+			ui.Render(grid)
+		}
+	}()
+
+	// Update process list every 3 seconds
+	go func() {
+		for range time.NewTicker(3 * time.Second).C {
 			procs, _ := process.Processes()
-			procData = [][]string{}
+			newProcData := [][]string{}
 
 			for _, p := range procs {
 				pid := p.Pid
 				name, _ := p.Name()
-				cpuPercent, _ := p.CPUPercent()
+				cpuPercent, _ := p.CPUPercent() // Takes time
 				memPercent, _ := p.MemoryPercent()
-				procData = append(procData, []string{
+
+				newProcData = append(newProcData, []string{
 					fmt.Sprintf("%d", pid),
 					name,
 					fmt.Sprintf("%.2f%%", cpuPercent),
@@ -103,24 +111,16 @@ func main() {
 			}
 
 			// Sort processes by CPU usage (descending order)
-			sort.Slice(procData, func(i, j int) bool {
-				return procData[i][2] > procData[j][2]
+			sort.Slice(newProcData, func(i, j int) bool {
+				return newProcData[i][2] > newProcData[j][2]
 			})
 
-			// Keep only the top 30 processes
-			if len(procData) > 30 {
-				procData = procData[:30]
+			// Keep only the top 50 processes
+			if len(newProcData) > 50 {
+				newProcData = newProcData[:50]
 			}
 
-			// Update table rows with scroll offset
-			endIndex := scrollOffset + maxVisibleRows
-			if endIndex > len(procData) {
-				endIndex = len(procData)
-			}
-			displayRows := append([][]string{{"PID", "Name", "CPU%", "Memory%"}}, procData[scrollOffset:endIndex]...)
-
-			processTable.Rows = displayRows
-			ui.Render(grid)
+			procData = newProcData // Update global process data
 		}
 	}()
 
@@ -128,7 +128,7 @@ func main() {
 	for e := range ui.PollEvents() {
 		if e.Type == ui.KeyboardEvent {
 			switch e.ID {
-			case "<C-c>", "q":
+			case "q":
 				return
 			case "<Up>":
 				if scrollOffset > 0 {
@@ -139,6 +139,15 @@ func main() {
 					scrollOffset++
 				}
 			}
+
+			// Update table rows with new scroll position
+			endIndex := scrollOffset + maxVisibleRows
+			if endIndex > len(procData) {
+				endIndex = len(procData)
+			}
+			displayRows := append([][]string{{"PID", "Name", "CPU%", "Memory%"}}, procData[scrollOffset:endIndex]...)
+
+			processTable.Rows = displayRows
 			ui.Render(grid)
 		}
 	}
